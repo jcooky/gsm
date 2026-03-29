@@ -10,9 +10,10 @@ function LoginForm() {
 
   const handleGitHubLogin = async () => {
     const supabase = createSupabaseBrowser()
+    const callbackUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirect)}`
     await supabase.auth.signInWithOAuth({
       provider: "github",
-      options: { redirectTo: `${window.location.origin}${redirect}` },
+      options: { redirectTo: callbackUrl },
     })
   }
 
