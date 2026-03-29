@@ -49,7 +49,9 @@ That's it. On first use, your client opens a browser for GitHub login — authen
 
 ## System Prompt
 
-For your AI to actively use the memory tools, add this to your **Cursor Rules** or **Claude Project Instructions**:
+For your AI to actively use the memory tools, add this to your **Cursor Rules** or **Claude Project Instructions**.
+
+> Adapted from the [official MCP Memory Server system prompt](https://github.com/modelcontextprotocol/servers/tree/main/src/memory#system-prompt).
 
 ```
 Follow these steps for each interaction:
