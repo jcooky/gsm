@@ -20,12 +20,17 @@ export default async function Home() {
           <p className="text-sm text-neutral-400">
             Signed in as <span className="text-neutral-100 font-medium">{user.email ?? user.user_metadata?.user_name ?? user.id}</span>
           </p>
-          <Link
-            href="/logout"
-            className="text-sm text-neutral-500 hover:text-neutral-300 underline underline-offset-4 transition-colors"
-          >
-            Sign out
-          </Link>
+          <div className="flex gap-4 text-sm">
+            <Link href="/migrate" className="text-neutral-400 hover:text-neutral-100 transition-colors">
+              Migrate memory
+            </Link>
+            <Link
+              href="/logout"
+              className="text-neutral-500 hover:text-neutral-300 transition-colors"
+            >
+              Sign out
+            </Link>
+          </div>
         </div>
       ) : (
         <Link
