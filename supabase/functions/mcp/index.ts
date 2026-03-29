@@ -106,7 +106,28 @@ function buildMcpServer(manager: KnowledgeGraphManager): McpServer {
   return server
 }
 
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? ""
+const AUTH_SERVER = `${SUPABASE_URL}/auth/v1`
+const RESOURCE_URL = `${SUPABASE_URL}/functions/v1/mcp`
+
+// WWW-Authenticate header per MCP OAuth spec (RFC 9728 + MCP 2025-06-18)
+const WWW_AUTHENTICATE =
+  `Bearer realm="${RESOURCE_URL}", ` +
+  `authorization_uri="${AUTH_SERVER}/oauth/authorize", ` +
+  `registration_uri="${AUTH_SERVER}/oauth/clients/register", ` +
+  `resource_metadata="${SUPABASE_URL}/.well-known/oauth-protected-resource"`
+
 const app = new Hono().basePath("/mcp")
+
+// Protected Resource Metadata endpoint (RFC 9728) — lets MCP clients discover the OAuth server
+app.get("/.well-known/oauth-protected-resource", (c) => {
+  return c.json({
+    resource: RESOURCE_URL,
+    authorization_servers: [AUTH_SERVER],
+    bearer_methods_supported: ["header"],
+    resource_documentation: "https://github.com/jcooky/gsm",
+  })
+})
 
 app.post("/", async (c) => {
   let auth
@@ -114,11 +135,16 @@ app.post("/", async (c) => {
     auth = await authenticate(c.req.raw)
   } catch (err) {
     if (err instanceof AuthError) {
-      return c.json({
-        jsonrpc: "2.0",
-        error: { code: -32001, message: err.message },
-        id: null,
-      }, 401)
+      return new Response(
+        JSON.stringify({ jsonrpc: "2.0", error: { code: -32001, message: err.message }, id: null }),
+        {
+          status: 401,
+          headers: {
+            "Content-Type": "application/json",
+            "WWW-Authenticate": WWW_AUTHENTICATE,
+          },
+        }
+      )
     }
     throw err
   }
@@ -136,7 +162,20 @@ app.post("/", async (c) => {
   return response
 })
 
-app.get("/", (c) => c.json({ error: "Method not allowed" }, 405))
+// SSE fallback: return 401 with WWW-Authenticate so Cursor knows OAuth is required
+app.get("/", (c) => {
+  return new Response(
+    JSON.stringify({ error: "Authentication required" }),
+    {
+      status: 401,
+      headers: {
+        "Content-Type": "application/json",
+        "WWW-Authenticate": WWW_AUTHENTICATE,
+      },
+    }
+  )
+})
+
 app.delete("/", (c) => c.json({ error: "Method not allowed" }, 405))
 
 Deno.serve(app.fetch)
