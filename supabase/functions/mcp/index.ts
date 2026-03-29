@@ -106,7 +106,7 @@ function buildMcpServer(manager: KnowledgeGraphManager): McpServer {
   return server
 }
 
-const app = new Hono().basePath("/functions/v1/mcp")
+const app = new Hono().basePath("/mcp")
 
 app.post("/", async (c) => {
   let auth

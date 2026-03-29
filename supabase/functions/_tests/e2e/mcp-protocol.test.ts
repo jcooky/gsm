@@ -2,6 +2,14 @@ import { assertEquals, assertExists } from "@std/assert"
 import { createTestUser, deleteTestUser, HEALTH_URL, MCP_URL, type TestUser } from "../helpers.ts"
 
 // ---------------------------------------------------------------------------
+// Deno.test wrapper — disables leak detection (Supabase client uses intervals)
+// ---------------------------------------------------------------------------
+
+function test(name: string, fn: () => Promise<void>): void {
+  Deno.test({ name, fn, sanitizeOps: false, sanitizeResources: false })
+}
+
+// ---------------------------------------------------------------------------
 // JSON-RPC helpers
 // ---------------------------------------------------------------------------
 
@@ -10,7 +18,10 @@ async function mcpRequest(
   params: Record<string, unknown>,
   user?: TestUser,
 ): Promise<Response> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" }
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "Accept": "application/json, text/event-stream",
+  }
   if (user) headers["Authorization"] = `Bearer ${user.accessToken}`
 
   return fetch(MCP_URL, {
@@ -20,23 +31,27 @@ async function mcpRequest(
   })
 }
 
+function parseSseResponse(text: string): unknown {
+  // SSE format: "event: message\ndata: {...}\n\n"
+  const dataLine = text.split("\n").find((l) => l.startsWith("data:"))
+  if (dataLine) return JSON.parse(dataLine.slice(5).trim())
+  return JSON.parse(text)
+}
+
 async function mcpCall(
   toolName: string,
   args: Record<string, unknown>,
   user: TestUser,
 ): Promise<unknown> {
   const res = await mcpRequest("tools/call", { name: toolName, arguments: args }, user)
-  const text = await res.text()
-  // Streamable HTTP may return SSE or JSON
-  const jsonLine = text.includes("data:") ? text.split("data:").at(-1)!.trim() : text
-  return JSON.parse(jsonLine)
+  return parseSseResponse(await res.text())
 }
 
 // ---------------------------------------------------------------------------
 // Health check
 // ---------------------------------------------------------------------------
 
-Deno.test("GET /health — returns {status: ok}", async () => {
+test("GET /health — returns {status: ok}", async () => {
   const res = await fetch(HEALTH_URL)
   assertEquals(res.status, 200)
   const body = await res.json()
@@ -47,7 +62,7 @@ Deno.test("GET /health — returns {status: ok}", async () => {
 // Authentication
 // ---------------------------------------------------------------------------
 
-Deno.test("POST /mcp without auth — returns 401", async () => {
+test("POST /mcp without auth — returns 401", async () => {
   const res = await mcpRequest("tools/list", {})
   assertEquals(res.status, 401)
   await res.body?.cancel()
@@ -57,17 +72,14 @@ Deno.test("POST /mcp without auth — returns 401", async () => {
 // MCP Protocol — tools/list
 // ---------------------------------------------------------------------------
 
-Deno.test("tools/list — returns all 9 memory tools", async () => {
+test("tools/list — returns all 9 memory tools", async () => {
   const user = await createTestUser("e2e-list")
   try {
     const res = await mcpRequest("tools/list", {}, user)
     assertEquals(res.status, 200)
 
-    const text = await res.text()
-    const jsonLine = text.includes("data:") ? text.split("data:").at(-1)!.trim() : text
-    const body = JSON.parse(jsonLine)
-
-    const toolNames: string[] = body.result.tools.map((t: { name: string }) => t.name)
+    const body = parseSseResponse(await res.text()) as { result: { tools: { name: string }[] } }
+    const toolNames = body.result.tools.map((t) => t.name)
     const expected = [
       "create_entities",
       "create_relations",
@@ -92,7 +104,7 @@ Deno.test("tools/list — returns all 9 memory tools", async () => {
 // MCP Protocol — full round-trip
 // ---------------------------------------------------------------------------
 
-Deno.test("create_entities → read_graph — round-trip through MCP", async () => {
+test("create_entities → read_graph — round-trip through MCP", async () => {
   const user = await createTestUser("e2e-roundtrip")
   try {
     await mcpCall("create_entities", {
@@ -119,7 +131,7 @@ Deno.test("create_entities → read_graph — round-trip through MCP", async () 
   }
 })
 
-Deno.test("search_nodes — returns matching entities via MCP", async () => {
+test("search_nodes — returns matching entities via MCP", async () => {
   const user = await createTestUser("e2e-search")
   try {
     await mcpCall("create_entities", {
@@ -145,7 +157,7 @@ Deno.test("search_nodes — returns matching entities via MCP", async () => {
 // Compatibility — response format matches original memory server
 // ---------------------------------------------------------------------------
 
-Deno.test("response format — entities have name/entityType/observations fields", async () => {
+test("response format — entities have name/entityType/observations fields", async () => {
   const user = await createTestUser("e2e-compat")
   try {
     await mcpCall("create_entities", {
@@ -167,7 +179,7 @@ Deno.test("response format — entities have name/entityType/observations fields
   }
 })
 
-Deno.test("response format — relations have from/to/relationType fields", async () => {
+test("response format — relations have from/to/relationType fields", async () => {
   const user = await createTestUser("e2e-compat-rel")
   try {
     await mcpCall("create_entities", {

@@ -3,6 +3,14 @@ import { createTestUser, deleteTestUser, type TestUser } from "../helpers.ts"
 import { KnowledgeGraphManager } from "../../_shared/graph-manager.ts"
 
 // ---------------------------------------------------------------------------
+// Deno.test wrapper — disables leak detection (Supabase client uses intervals)
+// ---------------------------------------------------------------------------
+
+function test(name: string, fn: () => Promise<void>): void {
+  Deno.test({ name, fn, sanitizeOps: false, sanitizeResources: false })
+}
+
+// ---------------------------------------------------------------------------
 // Test lifecycle helpers
 // ---------------------------------------------------------------------------
 
@@ -26,7 +34,7 @@ async function withUser(
 // Entity CRUD
 // ---------------------------------------------------------------------------
 
-Deno.test("createEntities — creates new entities with observations", async () => {
+test("createEntities — creates new entities with observations", async () => {
   await withUser("create-entities", async (_, mgr) => {
     const created = await mgr.createEntities([
       { name: "Alice", entityType: "person", observations: ["likes coffee", "works at Acme"] },
@@ -44,7 +52,7 @@ Deno.test("createEntities — creates new entities with observations", async () 
   })
 })
 
-Deno.test("createEntities — ignores duplicate entity names (idempotent)", async () => {
+test("createEntities — ignores duplicate entity names (idempotent)", async () => {
   await withUser("create-dup", async (_, mgr) => {
     await mgr.createEntities([{ name: "Bob", entityType: "person", observations: [] }])
     const second = await mgr.createEntities([{ name: "Bob", entityType: "person", observations: [] }])
@@ -56,7 +64,7 @@ Deno.test("createEntities — ignores duplicate entity names (idempotent)", asyn
   })
 })
 
-Deno.test("deleteEntities — removes entity and cascades its relations", async () => {
+test("deleteEntities — removes entity and cascades its relations", async () => {
   await withUser("delete-cascade", async (_, mgr) => {
     await mgr.createEntities([
       { name: "X", entityType: "node", observations: [] },
@@ -77,7 +85,7 @@ Deno.test("deleteEntities — removes entity and cascades its relations", async 
 // Relation CRUD
 // ---------------------------------------------------------------------------
 
-Deno.test("createRelations — creates relation between existing entities", async () => {
+test("createRelations — creates relation between existing entities", async () => {
   await withUser("create-rel", async (_, mgr) => {
     await mgr.createEntities([
       { name: "Dennis", entityType: "person", observations: [] },
@@ -93,7 +101,7 @@ Deno.test("createRelations — creates relation between existing entities", asyn
   })
 })
 
-Deno.test("createRelations — skips relation when entity does not exist", async () => {
+test("createRelations — skips relation when entity does not exist", async () => {
   await withUser("create-rel-missing", async (_, mgr) => {
     await mgr.createEntities([{ name: "OnlyOne", entityType: "node", observations: [] }])
     const created = await mgr.createRelations([{ from: "OnlyOne", to: "Ghost", relationType: "points_to" }])
@@ -102,7 +110,7 @@ Deno.test("createRelations — skips relation when entity does not exist", async
   })
 })
 
-Deno.test("createRelations — ignores duplicate relations (idempotent)", async () => {
+test("createRelations — ignores duplicate relations (idempotent)", async () => {
   await withUser("create-rel-dup", async (_, mgr) => {
     await mgr.createEntities([
       { name: "A", entityType: "node", observations: [] },
@@ -116,7 +124,7 @@ Deno.test("createRelations — ignores duplicate relations (idempotent)", async 
   })
 })
 
-Deno.test("deleteRelations — removes only the specified relation", async () => {
+test("deleteRelations — removes only the specified relation", async () => {
   await withUser("delete-rel", async (_, mgr) => {
     await mgr.createEntities([
       { name: "P", entityType: "node", observations: [] },
@@ -139,7 +147,7 @@ Deno.test("deleteRelations — removes only the specified relation", async () =>
 // Observations
 // ---------------------------------------------------------------------------
 
-Deno.test("addObservations — adds new observations, skips duplicates", async () => {
+test("addObservations — adds new observations, skips duplicates", async () => {
   await withUser("add-obs", async (_, mgr) => {
     await mgr.createEntities([{ name: "Eve", entityType: "person", observations: ["loves jazz"] }])
 
@@ -156,7 +164,7 @@ Deno.test("addObservations — adds new observations, skips duplicates", async (
   })
 })
 
-Deno.test("addObservations — throws when entity does not exist", async () => {
+test("addObservations — throws when entity does not exist", async () => {
   await withUser("add-obs-missing", async (_, mgr) => {
     await assertRejects(
       () => mgr.addObservations([{ entityName: "Ghost", contents: ["hello"] }]),
@@ -166,7 +174,7 @@ Deno.test("addObservations — throws when entity does not exist", async () => {
   })
 })
 
-Deno.test("deleteObservations — removes only specified observations", async () => {
+test("deleteObservations — removes only specified observations", async () => {
   await withUser("delete-obs", async (_, mgr) => {
     await mgr.createEntities([{
       name: "Fred",
@@ -186,7 +194,7 @@ Deno.test("deleteObservations — removes only specified observations", async ()
 // Read / Search
 // ---------------------------------------------------------------------------
 
-Deno.test("readGraph — returns all entities and relations", async () => {
+test("readGraph — returns all entities and relations", async () => {
   await withUser("read-graph", async (_, mgr) => {
     await mgr.createEntities([
       { name: "Node1", entityType: "thing", observations: ["obs"] },
@@ -200,7 +208,7 @@ Deno.test("readGraph — returns all entities and relations", async () => {
   })
 })
 
-Deno.test("searchNodes — finds by entity name", async () => {
+test("searchNodes — finds by entity name", async () => {
   await withUser("search-name", async (_, mgr) => {
     await mgr.createEntities([
       { name: "TypeScript", entityType: "language", observations: [] },
@@ -213,7 +221,7 @@ Deno.test("searchNodes — finds by entity name", async () => {
   })
 })
 
-Deno.test("searchNodes — finds by entity type", async () => {
+test("searchNodes — finds by entity type", async () => {
   await withUser("search-type", async (_, mgr) => {
     await mgr.createEntities([
       { name: "Alice", entityType: "person", observations: [] },
@@ -226,7 +234,7 @@ Deno.test("searchNodes — finds by entity type", async () => {
   })
 })
 
-Deno.test("searchNodes — finds by observation content", async () => {
+test("searchNodes — finds by observation content", async () => {
   await withUser("search-obs", async (_, mgr) => {
     await mgr.createEntities([
       { name: "Alice", entityType: "person", observations: ["speaks Korean", "likes hiking"] },
@@ -239,7 +247,7 @@ Deno.test("searchNodes — finds by observation content", async () => {
   })
 })
 
-Deno.test("searchNodes — returns connected relations", async () => {
+test("searchNodes — returns connected relations", async () => {
   await withUser("search-rels", async (_, mgr) => {
     await mgr.createEntities([
       { name: "Foo", entityType: "node", observations: ["target"] },
@@ -252,7 +260,7 @@ Deno.test("searchNodes — returns connected relations", async () => {
   })
 })
 
-Deno.test("openNodes — returns specified entities and their relations", async () => {
+test("openNodes — returns specified entities and their relations", async () => {
   await withUser("open-nodes", async (_, mgr) => {
     await mgr.createEntities([
       { name: "Alpha", entityType: "node", observations: [] },
@@ -271,7 +279,7 @@ Deno.test("openNodes — returns specified entities and their relations", async 
 // Namespace isolation (RLS)
 // ---------------------------------------------------------------------------
 
-Deno.test("RLS — user cannot read another user's entities", async () => {
+test("RLS — user cannot read another user's entities", async () => {
   const userA = await createTestUser("rls-a")
   const userB = await createTestUser("rls-b")
   try {
@@ -287,7 +295,7 @@ Deno.test("RLS — user cannot read another user's entities", async () => {
   }
 })
 
-Deno.test("RLS — user cannot delete another user's entities", async () => {
+test("RLS — user cannot delete another user's entities", async () => {
   const userA = await createTestUser("rls-del-a")
   const userB = await createTestUser("rls-del-b")
   try {
@@ -305,7 +313,7 @@ Deno.test("RLS — user cannot delete another user's entities", async () => {
   }
 })
 
-Deno.test("namespace — auto-created on first request", async () => {
+test("namespace — auto-created on first request", async () => {
   const user = await createTestUser("ns-autocreate")
   try {
     const mgr = manager(user)
