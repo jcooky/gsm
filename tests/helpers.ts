@@ -1,26 +1,27 @@
-import { createClient, SupabaseClient } from "@supabase/supabase-js"
+import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
-export const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "http://127.0.0.1:54321"
-export const SUPABASE_ANON_KEY = Deno.env.get("SB_PUBLISHABLE_KEY") ??
-  Deno.env.get("SUPABASE_ANON_KEY") ??
+export const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321"
+export const SUPABASE_ANON_KEY =
+  process.env.SB_PUBLISHABLE_KEY ??
+  process.env.SUPABASE_ANON_KEY ??
   "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH"
-export const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SB_SECRET_KEY") ??
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
+export const SUPABASE_SERVICE_ROLE_KEY =
+  process.env.SB_SECRET_KEY ??
+  process.env.SUPABASE_SERVICE_ROLE_KEY ??
   "sb_secret_N7UND0UgjKTVK-Uodkm0Hg_xSvEMPvz"
-export const MCP_URL = Deno.env.get("MCP_URL") ?? "http://127.0.0.1:54321/functions/v1/mcp"
-export const HEALTH_URL = Deno.env.get("HEALTH_URL") ?? "http://127.0.0.1:54321/functions/v1/health"
 
-export function adminClient(): SupabaseClient {
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    realtime: { heartbeatIntervalMs: 0 },
-  })
-}
+export const MCP_URL = process.env.MCP_URL ?? "http://127.0.0.1:54321/functions/v1/mcp"
+export const HEALTH_URL = process.env.HEALTH_URL ?? "http://127.0.0.1:54321/functions/v1/health"
 
 export interface TestUser {
   id: string
   email: string
   accessToken: string
   client: SupabaseClient
+}
+
+function adminClient(): SupabaseClient {
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 }
 
 export async function createTestUser(suffix: string): Promise<TestUser> {
@@ -35,15 +36,12 @@ export async function createTestUser(suffix: string): Promise<TestUser> {
   })
   if (createError || !created.user) throw new Error(`createUser failed: ${createError?.message}`)
 
-  const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    realtime: { heartbeatIntervalMs: 0 },
-  })
-  const { data: session, error: signInError } = await anonClient.auth.signInWithPassword({ email, password })
+  const { data: session, error: signInError } = await createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    .auth.signInWithPassword({ email, password })
   if (signInError || !session.session) throw new Error(`signIn failed: ${signInError?.message}`)
 
   const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: `Bearer ${session.session.access_token}` } },
-    realtime: { heartbeatIntervalMs: 0 },
   })
 
   return {
@@ -55,6 +53,5 @@ export async function createTestUser(suffix: string): Promise<TestUser> {
 }
 
 export async function deleteTestUser(userId: string): Promise<void> {
-  const admin = adminClient()
-  await admin.auth.admin.deleteUser(userId)
+  await adminClient().auth.admin.deleteUser(userId)
 }
