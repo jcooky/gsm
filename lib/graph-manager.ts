@@ -157,20 +157,23 @@ export class KnowledgeGraphManager {
 
   async searchNodes(query: string): Promise<KnowledgeGraph> {
     const namespaceId = await this.ensureNamespace()
-    const q = query.toLowerCase()
 
-    const { data: allEntities } = await this.supabase
+    const { data: entities, error } = await this.supabase
+      .rpc("search_entities", {
+        p_namespace_id: namespaceId,
+        p_query: query,
+      }) as unknown as { data: { id: string; name: string; entity_type: string }[] | null; error: any }
+
+    if (error) throw new Error(`Search failed: ${error.message}`)
+    if (!entities || entities.length === 0) return { entities: [], relations: [] }
+
+    const entityIds = entities.map((e) => e.id)
+    const { data: withObs } = await this.supabase
       .from("entities")
       .select("id, name, entity_type, observations(content)")
-      .eq("namespace_id", namespaceId)
+      .in("id", entityIds)
 
-    const matched = (allEntities ?? []).filter((e: any) =>
-      e.name.toLowerCase().includes(q) ||
-      e.entity_type.toLowerCase().includes(q) ||
-      e.observations.some((o: { content: string }) => o.content.toLowerCase().includes(q))
-    )
-
-    return this.entitiesToGraph(matched, namespaceId)
+    return this.entitiesToGraph(withObs ?? [], namespaceId)
   }
 
   async openNodes(names: string[]): Promise<KnowledgeGraph> {
