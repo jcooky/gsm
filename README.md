@@ -47,6 +47,52 @@ That's it. On first use, your client opens a browser for GitHub login — authen
 
 ---
 
+## System Prompt
+
+For your AI to actively use the memory tools, add this to your **Cursor Rules** or **Claude Project Instructions**:
+
+```
+Follow these steps for each interaction:
+
+1. Memory Retrieval:
+   - Always begin by saying "Remembering..." and call read_graph or search_nodes
+     to retrieve relevant information about the user and context.
+
+2. Active Listening:
+   - While conversing, watch for new information in these categories:
+     a) Basic Identity (name, location, job, education, etc.)
+     b) Behaviors (interests, habits, preferences)
+     c) Goals (current projects, targets, aspirations)
+     d) Relationships (people, organizations, tools the user works with)
+
+3. Memory Update:
+   - When new information is gathered, update the graph:
+     a) create_entities for new people, projects, organizations, or concepts
+     b) create_relations to connect them
+     c) add_observations to record specific facts
+   - Keep observations atomic — one fact per observation.
+
+4. Memory Hygiene:
+   - Use delete_observations to correct outdated facts.
+   - Use delete_entities when something is no longer relevant.
+```
+
+**Cursor Rules** (`~/.cursor/rules/memory.mdc`):
+
+```markdown
+---
+description: Use GSM memory tools to remember context across sessions
+globs:
+alwaysApply: true
+---
+
+[paste the prompt above]
+```
+
+**Claude Projects**: paste into the "Project Instructions" field.
+
+---
+
 ## Features
 
 ### 9 Knowledge Graph Tools (drop-in compatible)
