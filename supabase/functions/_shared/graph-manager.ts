@@ -194,21 +194,17 @@ export class KnowledgeGraphManager {
   async searchNodes(query: string): Promise<KnowledgeGraph> {
     const namespaceId = await this.ensureNamespace()
 
-    const { data: entities, error } = await this.supabase
-      .rpc("search_entities", {
-        p_namespace_id: namespaceId,
-        p_query: query,
-      })
-      .select("id, name, entity_type")
+    // deno-lint-ignore no-explicit-any
+    const rpcResult = await (this.supabase.rpc("search_entities", {
+      p_namespace_id: namespaceId,
+      p_query: query,
+    }) as unknown as Promise<{ data: { id: string; name: string; entity_type: string }[] | null; error: { message: string } | null }>)
 
+    const { data: entities, error } = rpcResult
     if (error) throw new Error(`Search failed: ${error.message}`)
-
-    if (!entities || entities.length === 0) {
-      return { entities: [], relations: [] }
-    }
+    if (!entities || entities.length === 0) return { entities: [], relations: [] }
 
     const entityIds = entities.map((e) => e.id)
-
     const { data: withObs } = await this.supabase
       .from("entities")
       .select("id, name, entity_type, observations(content)")
