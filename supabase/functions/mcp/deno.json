@@ -1,0 +1,10 @@
+{
+  "imports": {
+    "@supabase/functions-js": "jsr:@supabase/functions-js@^2",
+    "@supabase/supabase-js": "jsr:@supabase/supabase-js@2",
+    "@modelcontextprotocol/sdk/server/mcp.js": "npm:@modelcontextprotocol/sdk@1.25.3/server/mcp.js",
+    "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js": "npm:@modelcontextprotocol/sdk@1.25.3/server/webStandardStreamableHttp.js",
+    "hono": "npm:hono@^4.9.7",
+    "zod": "npm:zod@^3.24.0"
+  }
+}
