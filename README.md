@@ -30,6 +30,41 @@ claude mcp add gsm --transport http https://<project-ref>.supabase.co/functions/
 
 On first use, your client will open a browser window for GitHub login. After that, authentication is automatic.
 
+## Testing
+
+### Integration Tests (graph-manager + RLS)
+
+Runs against the local Supabase DB. Requires `supabase start` to be running.
+
+```bash
+deno test \
+  --allow-net --allow-env \
+  --config supabase/functions/_tests/deno.json \
+  supabase/functions/_tests/integration/
+```
+
+### E2E Tests (MCP protocol over HTTP)
+
+Requires both `supabase start` and `supabase functions serve` to be running.
+
+```bash
+deno test \
+  --allow-net --allow-env \
+  --config supabase/functions/_tests/deno.json \
+  supabase/functions/_tests/e2e/
+```
+
+### Run all tests
+
+```bash
+deno test \
+  --allow-net --allow-env \
+  --config supabase/functions/_tests/deno.json \
+  supabase/functions/_tests/
+```
+
+---
+
 ## Migrating from local memory server
 
 If you have an existing `memory.json` or `memory.jsonl` file, you can import it via the GSM website (coming in Phase 1b).
