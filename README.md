@@ -1,22 +1,37 @@
 # GSM — Global Shared Memory
 
-A cloud-hosted remote MCP server that gives your AI a persistent, shared knowledge graph — accessible from any device or IDE.
+> Your AI remembers the same things, everywhere.
 
-Built on [Supabase](https://supabase.com) Edge Functions + PostgreSQL, with GitHub OAuth via the [MCP Authorization spec](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization).
+GSM is a cloud-hosted **Remote MCP server** that gives AI assistants a persistent, shared knowledge graph. Whether you're using Cursor on your laptop, Claude Code on a remote server, or any other MCP-compatible client — your AI carries the same memory everywhere.
 
-## How it works
+No more re-introducing yourself every session. No more "as I mentioned before." Just connect once with GitHub and your AI is up to speed.
 
-GSM is a drop-in cloud replacement for the [MCP Memory Server](https://github.com/modelcontextprotocol/servers/tree/main/src/memory). It exposes the same 9 tools (`create_entities`, `create_relations`, `add_observations`, `delete_entities`, `delete_observations`, `delete_relations`, `read_graph`, `search_nodes`, `open_nodes`) over Streamable HTTP transport, with each user's knowledge graph isolated by GitHub identity.
+---
 
-## MCP Client Setup
+## What is it?
+
+GSM is a cloud replacement for the [local MCP Memory Server](https://github.com/modelcontextprotocol/servers/tree/main/src/memory). It exposes the identical 9 tools over [Streamable HTTP transport](https://modelcontextprotocol.io/specification/2025-11-25) — fully compatible with any MCP client — backed by a cloud database instead of a local `.jsonl` file.
+
+```
+Local memory server          GSM
+──────────────────           ────────────────────────────────────────
+stdio transport         →    Streamable HTTP (accessible from anywhere)
+memory.jsonl file       →    PostgreSQL (durable, concurrent-safe)
+single machine          →    all your devices, all your IDEs
+manual API key setup    →    GitHub login via MCP OAuth standard
+```
+
+## Quick Start
 
 ### Cursor
+
+Add to your `~/.cursor/mcp.json`:
 
 ```json
 {
   "mcpServers": {
     "gsm": {
-      "url": "https://<project-ref>.supabase.co/functions/v1/mcp"
+      "url": "https://gsm-mu.vercel.app/mcp"
     }
   }
 }
@@ -25,125 +40,229 @@ GSM is a drop-in cloud replacement for the [MCP Memory Server](https://github.co
 ### Claude Code
 
 ```bash
-claude mcp add gsm --transport http https://<project-ref>.supabase.co/functions/v1/mcp
+claude mcp add gsm --transport http https://gsm-mu.vercel.app/mcp
 ```
 
-On first use, your client will open a browser window for GitHub login. After that, authentication is automatic.
-
-## Testing
-
-### Integration Tests (graph-manager + RLS)
-
-Runs against the local Supabase DB. Requires `supabase start` to be running.
-
-```bash
-deno test \
-  --allow-net --allow-env \
-  --config supabase/functions/_tests/deno.json \
-  supabase/functions/_tests/integration/
-```
-
-### E2E Tests (MCP protocol over HTTP)
-
-Requires both `supabase start` and `supabase functions serve` to be running.
-
-```bash
-deno test \
-  --allow-net --allow-env \
-  --config supabase/functions/_tests/deno.json \
-  supabase/functions/_tests/e2e/
-```
-
-### Run all tests
-
-```bash
-deno test \
-  --allow-net --allow-env \
-  --config supabase/functions/_tests/deno.json \
-  supabase/functions/_tests/
-```
+That's it. On first use, your client opens a browser for GitHub login — authentication is automatic from then on.
 
 ---
 
-## Migrating from local memory server
+## Features
 
-If you have an existing `memory.json` or `memory.jsonl` file, you can import it via the GSM website (coming in Phase 1b).
+### 9 Knowledge Graph Tools (drop-in compatible)
 
-## Local Development
+| Tool | Description |
+|------|-------------|
+| `create_entities` | Add people, projects, concepts to your AI's memory |
+| `create_relations` | Define how things relate to each other |
+| `add_observations` | Record facts about existing entities |
+| `delete_entities` | Remove entities (cascades relations) |
+| `delete_observations` | Remove specific facts |
+| `delete_relations` | Remove specific relationships |
+| `read_graph` | Read the full knowledge graph |
+| `search_nodes` | Full-text search across names, types, and observations |
+| `open_nodes` | Look up specific entities by name |
 
-### Prerequisites
+### Full-Text Search
 
-- [Supabase CLI](https://supabase.com/docs/guides/cli)
-- [Docker](https://docs.docker.com/get-docker/) (required by Supabase local stack)
-- A [GitHub OAuth App](https://github.com/settings/developers) with callback URL `http://localhost:54321/auth/v1/callback`
-
-### Setup
-
-```bash
-# 1. Clone and enter the repo
-git clone https://github.com/your-org/gsm
-cd gsm
-
-# 2. Copy env example and fill in your GitHub OAuth credentials
-cp .env.local.example .env.local
-
-# 3. Start Supabase local stack
-supabase start
-
-# 4. Serve Edge Functions
-supabase functions serve
-
-# MCP endpoint:   http://localhost:54321/functions/v1/mcp
-# Health check:   http://localhost:54321/functions/v1/health
-# Supabase Studio: http://localhost:54323
-```
-
-### Deploying to Supabase Cloud
-
-```bash
-# Link to your Supabase project
-supabase link --project-ref <your-project-ref>
-
-# Push DB migrations
-supabase db push
-
-# Set GitHub OAuth secrets
-supabase secrets set SUPABASE_AUTH_EXTERNAL_GITHUB_CLIENT_ID=<id>
-supabase secrets set SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET=<secret>
-
-# Deploy Edge Functions
-supabase functions deploy mcp
-supabase functions deploy health
-```
-
-## Project Structure
+`search_nodes` uses PostgreSQL's built-in full-text search (`websearch_to_tsquery`) with GIN indexes — not a slow in-memory filter. Supports natural language queries:
 
 ```
-gsm/
-├── supabase/
-│   ├── config.toml                         # Supabase config (GitHub OAuth, OAuth 2.1 server)
-│   ├── migrations/
-│   │   └── 20250329000000_initial_schema.sql  # Tables, RLS, indexes
-│   └── functions/
-│       ├── mcp/index.ts                    # MCP Streamable HTTP server (9 tools)
-│       ├── health/index.ts                 # Health check endpoint
-│       └── _shared/
-│           ├── types.ts                    # Entity, Relation, KnowledgeGraph types
-│           ├── auth.ts                     # JWT authentication helper
-│           └── graph-manager.ts            # All knowledge graph DB operations
-├── docs/
-│   └── req_analysis.md                     # Requirements analysis
-├── .env.local.example
-└── README.md
+"machine learning"   → exact phrase
+python OR typescript → either term
+coding -java         → exclude a term
+```
+
+### Privacy & Isolation
+
+Each GitHub account gets a completely isolated knowledge graph. Row Level Security (RLS) is enforced at the database level — your memories are never accessible to other users.
+
+### Migrate from local memory server
+
+Already using the local MCP memory server? Import your existing `memory.json` or `memory.jsonl` at [gsm-mu.vercel.app/migrate](https://gsm-mu.vercel.app/migrate). Format is auto-detected, import is idempotent, and you can export back any time.
+
+---
+
+## Architecture
+
+```
+Cursor / Claude Code / any MCP client
+         │
+         │  MCP Streamable HTTP (OAuth 2.1 + PKCE)
+         ▼
+   gsm-mu.vercel.app                    ← Next.js on Vercel
+   ├── /mcp                             ← MCP endpoint
+   ├── /.well-known/oauth-protected-resource   ← OAuth discovery (RFC 9728)
+   ├── /oauth/consent                   ← GitHub login consent screen
+   └── /migrate                         ← Import / export UI
+         │
+         │  Supabase JS (RLS-scoped queries)
+         ▼
+   Supabase
+   ├── PostgreSQL                       ← entities, relations, observations
+   │   └── Row Level Security           ← namespace isolation per user
+   ├── Auth (OAuth 2.1 Server)         ← GitHub OAuth, DCR, JWT issuance
+   └── Edge Functions                   ← health check
 ```
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| MCP Server | Supabase Edge Functions (Deno 2) |
-| MCP Transport | `WebStandardStreamableHTTPServerTransport` |
-| HTTP Routing | Hono |
-| Database | Supabase PostgreSQL + RLS |
-| Auth | Supabase Auth (OAuth 2.1 Server + GitHub) |
-| Website (Phase 1b) | Next.js on Vercel |
+| MCP Endpoint | Next.js API Route on Vercel |
+| MCP Transport | `WebStandardStreamableHTTPServerTransport` (MCP SDK v1.28) |
+| Website | Next.js 16 + Tailwind CSS |
+| Database | Supabase PostgreSQL 17 + RLS |
+| Auth | Supabase Auth (OAuth 2.1 + GitHub + Dynamic Client Registration) |
+| Search | PostgreSQL Full-Text Search (`tsvector` + GIN index) |
+| Tests | Vitest (integration + E2E, 26 tests) |
+
+---
+
+## Local Development
+
+### Prerequisites
+
+- Node.js 24 (`nvm use`)
+- [Supabase CLI](https://supabase.com/docs/guides/cli) + Docker
+- A [GitHub OAuth App](https://github.com/settings/developers) — callback URL: `http://localhost:54321/auth/v1/callback`
+
+### Setup
+
+```bash
+git clone https://github.com/jcooky/gsm
+cd gsm
+nvm use
+
+# Install dependencies
+npm install
+
+# Configure GitHub OAuth credentials
+cp .env.local.example .env.local
+# Fill in SUPABASE_AUTH_EXTERNAL_GITHUB_CLIENT_ID and _SECRET
+
+# Start Supabase (DB + Auth + Edge Functions runtime)
+export $(grep -v '^#' .env.local | xargs) && supabase start
+
+# Serve Edge Functions
+supabase functions serve
+
+# Start Next.js dev server
+npm run dev
+```
+
+| Service | URL |
+|---------|-----|
+| MCP endpoint (Edge Function) | `http://localhost:54321/functions/v1/mcp` |
+| MCP endpoint (Next.js) | `http://localhost:3000/mcp` |
+| Website | `http://localhost:3000` |
+| Supabase Studio | `http://localhost:54323` |
+
+### Running Tests
+
+```bash
+# All tests (integration + E2E)
+npm test
+
+# Integration only (graph-manager + RLS, no HTTP)
+npm run test:integration
+
+# E2E only (full MCP protocol over HTTP)
+npm run test:e2e
+
+# Watch mode
+npm run test:watch
+
+# With coverage
+npm run test:coverage
+```
+
+Tests require `supabase start` and `supabase functions serve` to be running locally.
+
+---
+
+## Self-Hosting
+
+### 1. Create a Supabase project
+
+[supabase.com/dashboard](https://supabase.com/dashboard) → New project
+
+Enable in the Supabase Dashboard:
+- **Authentication → OAuth Server**: enable + allow Dynamic Client Registration
+- **Authentication → Sign In / Providers**: add GitHub with your OAuth App credentials
+- **Authentication → URL Configuration**: set Site URL to your Vercel deployment URL
+
+### 2. Deploy to Vercel
+
+```bash
+# Link and deploy
+vercel link
+vercel --prod
+```
+
+### 3. Apply DB migrations
+
+```bash
+supabase link --project-ref <your-project-ref>
+supabase db push
+```
+
+### 4. Deploy Edge Functions
+
+```bash
+supabase functions deploy health --no-verify-jwt
+```
+
+### 5. Update your MCP client config
+
+```json
+{
+  "mcpServers": {
+    "gsm": {
+      "url": "https://your-vercel-url.vercel.app/mcp"
+    }
+  }
+}
+```
+
+---
+
+## Project Structure
+
+```
+gsm/
+├── app/
+│   ├── mcp/route.ts                    # MCP Streamable HTTP endpoint
+│   ├── mcp/.well-known/...             # OAuth Protected Resource Metadata
+│   ├── .well-known/oauth-protected-resource/  # Domain-root PRM
+│   ├── oauth/consent/                  # OAuth consent screen
+│   ├── migrate/                        # Import / export UI
+│   ├── login/                          # GitHub login page
+│   └── auth/callback/                  # OAuth callback handler
+├── lib/
+│   ├── graph-manager.ts                # All knowledge graph DB operations
+│   ├── mcp-server.ts                   # MCP server with 9 tools
+│   ├── auth.ts                         # JWT validation
+│   ├── migration.ts                    # JSON/JSONL parser + validator
+│   ├── oauth-metadata.ts               # OAuth discovery helpers
+│   └── types.ts                        # Entity, Relation, KnowledgeGraph
+├── tests/
+│   ├── integration/graph-manager.test.ts
+│   └── e2e/mcp-protocol.test.ts
+├── supabase/
+│   ├── config.toml
+│   ├── migrations/
+│   │   ├── 20250329000000_initial_schema.sql
+│   │   └── 20250330000000_fts_search.sql
+│   └── functions/
+│       ├── mcp/                        # Edge Function MCP server (Deno)
+│       └── health/                     # Health check
+└── docs/
+    └── req_analysis.md
+```
+
+---
+
+## License
+
+MIT
