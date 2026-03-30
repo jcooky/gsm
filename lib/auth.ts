@@ -6,9 +6,21 @@ export interface AuthContext {
 }
 
 export class AuthError extends Error {
-  constructor(message: string) {
+  readonly isExpired: boolean
+
+  constructor(message: string, isExpired = false) {
     super(message)
     this.name = "AuthError"
+    this.isExpired = isExpired
+  }
+}
+
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]))
+    return payload.exp && payload.exp < Math.floor(Date.now() / 1000)
+  } catch {
+    return false
   }
 }
 
@@ -26,7 +38,11 @@ export async function authenticate(req: Request): Promise<AuthContext> {
   const { data, error } = await (supabase.auth as any).getClaims(token)
 
   if (error || !data?.claims?.sub) {
-    throw new AuthError("Invalid or expired token")
+    const expired = isTokenExpired(token)
+    throw new AuthError(
+      expired ? "Token expired" : "Invalid token",
+      expired,
+    )
   }
 
   const userClient = createClient(url, anonKey, {
