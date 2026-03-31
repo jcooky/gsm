@@ -255,7 +255,17 @@ supabase link --project-ref <your-project-ref>
 supabase db push
 ```
 
-### 4. Deploy Edge Functions
+### 4. Configure Supabase Auth (Dashboard only)
+
+> **Important**: Do NOT use `supabase config push` for production. `config.toml` is for local development only. Production auth settings must be configured via the Supabase Dashboard.
+
+In the Supabase Dashboard:
+- **Authentication → URL Configuration**: set Site URL to your Vercel deployment URL
+- **Authentication → Sign In / Providers**: add GitHub with your production OAuth App credentials
+- **Authentication → OAuth Server**: enable + allow Dynamic Client Registration
+- **Authentication → Sessions**: set JWT expiry to 604800 (1 week) if on Pro plan
+
+### 5. Deploy Edge Functions
 
 ```bash
 supabase functions deploy health --no-verify-jwt
